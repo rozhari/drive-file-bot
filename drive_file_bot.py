@@ -20,14 +20,10 @@ from telegram.ext import (
     filters
 )
 
-# ---------- ENV ----------
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 GDRIVE_CREDENTIALS = os.getenv("GDRIVE_CREDENTIALS")
 GDRIVE_FOLDER_ID = os.getenv("GDRIVE_FOLDER_ID")
 BASE_URL = os.getenv("BASE_URL", "").rstrip("/")
-
-if not BOT_TOKEN or not GDRIVE_CREDENTIALS or not GDRIVE_FOLDER_ID:
-    raise Exception("Environment variables missing!")
 
 creds_json = json.loads(GDRIVE_CREDENTIALS)
 creds = service_account.Credentials.from_service_account_info(
@@ -38,7 +34,6 @@ drive_service = build("drive", "v3", credentials=creds, static_discovery=False)
 
 bot = Bot(token=BOT_TOKEN)
 
-# ---------- FLASK APP ----------
 app = Flask(__name__)
 UPLOAD_FOLDER = tempfile.gettempdir()
 Path(UPLOAD_FOLDER).mkdir(exist_ok=True)
@@ -67,7 +62,6 @@ def upload():
     if request.method == "GET":
         return render_template_string(HTML_FORM, token=token, user=user_id)
 
-    # POST upload
     file = request.files["file"]
     filename = secure_filename(file.filename)
     temp_path = os.path.join(UPLOAD_FOLDER, filename)
@@ -86,7 +80,6 @@ def upload():
         if resp is not None:
             done = True
 
-    # Make public
     file_id = resp["id"]
     drive_service.permissions().create(
         fileId=file_id,
@@ -100,12 +93,10 @@ def upload():
 
     bot.send_message(chat_id=user_id, text=f"✅ File uploaded!\n{final_link}")
 
-    return "Upload completed. Check Telegram for the download link."
-
-# ---------- TELEGRAM BOT ----------
+    return "Upload complete. Check Telegram for link."
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Send a file. Large files get a browser upload link.")
+    await update.message.reply_text("Send a file.")
 
 async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
@@ -117,17 +108,13 @@ async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file = update.message.video
     elif update.message.photo:
         file = update.message.photo[-1]
-    elif update.message.audio:
-        file = update.message.audio
-    elif update.message.voice:
-        file = update.message.voice
 
     if not file:
-        await update.message.reply_text("Unsupported file type.")
+        await update.message.reply_text("Unsupported file.")
         return
 
     if file.file_size <= 20 * 1024 * 1024:
-        await update.message.reply_text("Downloading small file...")
+        await update.message.reply_text("Uploading small file...")
 
         tg_file = await file.get_file()
         temp_path = f"/tmp/{uuid.uuid4().hex}"
@@ -145,7 +132,6 @@ async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         while resp is None:
             status, resp = request_drive.next_chunk()
 
-        # Make public
         drive_service.permissions().create(
             fileId=resp["id"],
             body={"type": "anyone", "role": "reader"}
@@ -157,14 +143,13 @@ async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Uploaded!\n{link}")
         return
 
-    # Large file → Give upload link
     token = uuid.uuid4().hex
     upload_sessions[token] = user_id
 
     upload_url = f"{BASE_URL}/upload?token={token}"
 
     await update.message.reply_text(
-        f"⚠️ Large file.\nUpload using this link:\n{upload_url}"
+        f"Large file detected.\nUpload here:\n{upload_url}"
     )
 
 def main():
@@ -180,7 +165,6 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, file_handler))
 
-    print("Bot running...")
     application.run_polling()
 
 if __name__ == "__main__":
