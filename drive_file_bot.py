@@ -86,7 +86,6 @@ def upload():
     while resp is None:
         status, resp = request_drive.next_chunk()
 
-    # make public
     file_id = resp["id"]
     drive_service.permissions().create(
         fileId=file_id, body={"type": "anyone", "role": "reader"}
@@ -94,17 +93,16 @@ def upload():
 
     link = resp.get("webContentLink") or resp.get("webViewLink")
 
-    # cleanup
     os.remove(temp_path)
     upload_sessions.pop(token, None)
 
-    bot.send_message(chat_id=user_id, text=f"✅ Uploaded!\n{link}")
+    bot.send_message(chat_id=user_id, text=f"✅ Uploaded Successfully!\n{link}")
 
-    return "Upload complete. Check Telegram for link."
+    return "Upload completed. Check Telegram for the link."
 
-# -------------------- TELEGRAM BOT --------------------
+# -------------------- TELEGRAM --------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Send a file.")
+    await update.message.reply_text("Send me a file.\nLarge files → Web upload link.")
 
 async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
@@ -113,12 +111,12 @@ async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file_obj = msg.document or msg.video or (msg.photo[-1] if msg.photo else None)
 
     if not file_obj:
-        await msg.reply_text("Unsupported file.")
+        await msg.reply_text("Unsupported file format.")
         return
 
-    # Small file = download via Telegram
+    # Small file → direct Telegram download
     if hasattr(file_obj, "file_size") and file_obj.file_size <= 20 * 1024 * 1024:
-        await msg.reply_text("Uploading small file...")
+        await msg.reply_text("Uploading small file to Drive...")
 
         tg_file = await file_obj.get_file()
         temp_path = f"/tmp/{uuid.uuid4().hex}"
@@ -145,15 +143,13 @@ async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text(f"Uploaded!\n{link}")
         return
 
-    # Large file: web upload
+    # Large file → give web upload link
     token = uuid.uuid4().hex
     upload_sessions[token] = user_id
 
     upload_url = f"{BASE_URL}/upload?token={token}"
 
-    await msg.reply_text(
-        f"Large file detected.\nUpload here:\n{upload_url}"
-    )
+    await msg.reply_text(f"Large file.\nUpload here:\n{upload_url}")
 
 # -------------------- MAIN --------------------
 def main():
@@ -169,7 +165,9 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, file_handler))
 
+    print("BOT RUNNING…")
     application.run_polling()
 
 if __name__ == "__main__":
     main()
+
