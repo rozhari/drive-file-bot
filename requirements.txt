@@ -3,5 +3,5 @@ google-api-python-client
 google-auth
 google-auth-oauthlib
 google-auth-httplib2
-Flask
-Werkzeug
+Flask==2.2.5
+Werkzeug==2.2.3
