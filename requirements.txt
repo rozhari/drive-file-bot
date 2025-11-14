@@ -1,0 +1,7 @@
+python-telegram-bot==20.7
+google-api-python-client==2.147.0
+google-auth==2.29.0
+google-auth-oauthlib==1.2.0
+google-auth-httplib2==0.2.0
+Flask==2.2.5
+Werkzeug==2.2.3
