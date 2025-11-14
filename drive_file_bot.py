@@ -15,9 +15,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-from telegram import Update
-# [CHANGE]: Removed explicit Bot import here, as it's defined globally later.
-# We ensure all necessary components are imported for v20.x usage.
+from telegram import Update, Bot # Ensure Bot is explicitly imported here
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -25,10 +23,6 @@ from telegram.ext import (
     ContextTypes,
     filters
 )
-
-# [NEW IMPORT]: Import the Bot class directly from the top-level telegram package
-# to avoid potential conflicts caused by internal v20.x structure.
-from telegram import Bot # Ensure Bot is explicitly imported here
 
 # -------------------- ENV --------------------
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -50,8 +44,8 @@ creds = service_account.Credentials.from_service_account_info(
 )
 drive_service = build("drive", "v3", credentials=creds, static_discovery=False)
 
-# This line is correct, but the previous import block caused the issue:
-bot = Bot(token=BOT_TOKEN)
+# [CHANGE]: Removed the global 'bot' object initialization (bot = Bot(token=BOT_TOKEN))
+# This is to prevent potential conflicts with ApplicationBuilder's internal initialization.
 
 # -------------------- FLASK --------------------
 app = Flask(__name__)
@@ -107,8 +101,8 @@ def upload():
     os.remove(temp_path)
     upload_sessions.pop(token, None)
 
-    # Use the global 'bot' object instead of trying to get it from context or application
-    # This bot is defined globally: bot = Bot(token=BOT_TOKEN)
+    # [CLEANUP]: Create a new Bot instance to send the final message.
+    # This avoids using the application's internal bot outside of the telegram loop.
     Bot(BOT_TOKEN).send_message(chat_id=user_id, text=f"✅ Uploaded Successfully!\n{link}")
 
     return "Upload completed. Check Telegram."
@@ -168,22 +162,19 @@ async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     port = int(os.getenv("PORT", 5000))
 
-    # We are using the global 'bot' object for Flask, so we don't need to
-    # pass it explicitly to ApplicationBuilder, allowing it to initialize without Updater.
-    # The ApplicationBuilder.build() method is used correctly for v20.x
+    # We must ensure Flask is run in a separate thread before application.run_polling() starts
+    threading.Thread(
+        target=lambda: app.run(host="0.0.0.0", port=port, debug=False),
+        daemon=True
+    ).start()
+    
+    # This is the standard, correct initialization for v20.x
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, file_handler))
 
-    # Running Flask in a separate thread
-    threading.Thread(
-        target=lambda: app.run(host="0.0.0.0", port=port, debug=False),
-        daemon=True
-    ).start()
-
     print("BOT RUNNING…")
-    # This is the correct way to start polling in python-telegram-bot v20.x
     application.run_polling()
 
 if __name__ == "__main__":
