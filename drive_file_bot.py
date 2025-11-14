@@ -7,6 +7,10 @@ from flask import Flask, request, render_template_string
 from werkzeug.utils import secure_filename
 from pathlib import Path
 
+# Load .env file
+from dotenv import load_dotenv
+load_dotenv()
+
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
@@ -98,7 +102,7 @@ def upload():
 
     bot.send_message(chat_id=user_id, text=f"✅ Uploaded Successfully!\n{link}")
 
-    return "Upload completed. Check Telegram for the link."
+    return "Upload completed. Check Telegram."
 
 # -------------------- TELEGRAM --------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -114,7 +118,7 @@ async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text("Unsupported file format.")
         return
 
-    # Small file → direct Telegram download
+    # Small file → direct upload
     if hasattr(file_obj, "file_size") and file_obj.file_size <= 20 * 1024 * 1024:
         await msg.reply_text("Uploading small file to Drive...")
 
@@ -143,7 +147,7 @@ async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text(f"Uploaded!\n{link}")
         return
 
-    # Large file → give web upload link
+    # Large file → give link
     token = uuid.uuid4().hex
     upload_sessions[token] = user_id
 
@@ -170,4 +174,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
